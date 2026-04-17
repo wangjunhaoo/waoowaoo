@@ -7,7 +7,10 @@ import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-strea
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { getUserModelConfig } from '@/lib/config-service'
-import { createTextMarkerMatcher } from '@/lib/novel-promotion/story-to-script/clip-matching'
+import {
+  createClipContentMatcher,
+  createTextMarkerMatcher,
+} from '@/lib/novel-promotion/story-to-script/clip-matching'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
@@ -165,6 +168,7 @@ export async function handleEpisodeSplitTask(job: Job<TaskJobData>) {
           displayMode: 'detail',
         })
         const markerMatcher = createTextMarkerMatcher(content)
+        const boundaryMatcher = createClipContentMatcher(content)
         const resolved: EpisodeOutput[] = []
         let searchFrom = 0
 
@@ -190,26 +194,48 @@ export async function handleEpisodeSplitTask(job: Job<TaskJobData>) {
             throw new Error(`episode_${idx + 1} 必须同时提供 startMarker/endMarker`)
           }
 
-          const startMatch = markerMatcher.matchMarker(startMarker, searchFrom)
-          if (!startMatch) {
+          const boundaryMatch = boundaryMatcher.matchBoundary(startMarker, endMarker, searchFrom)
+          let startPos: number | null = boundaryMatch?.startIndex ?? null
+          let endPos: number | null = boundaryMatch?.endIndex ?? null
+
+          if (startPos === null || endPos === null) {
+            const startMatch = markerMatcher.matchMarker(startMarker, searchFrom)
+            if (!startMatch) {
+              throw new Error(`episode_${idx + 1} startMarker 无法定位`)
+            }
+
+            startPos = startMatch.startIndex
+            const endMatch = markerMatcher.matchMarker(endMarker, startMatch.endIndex)
+            if (endMatch) {
+              endPos = endMatch.endIndex
+            } else {
+              const nextEpisode = splitEpisodes[idx + 1]
+              const nextStartMarker = readBoundaryMarker(nextEpisode?.startMarker)
+              if (nextStartMarker) {
+                const nextStartMatch = markerMatcher.matchMarker(nextStartMarker, startMatch.endIndex)
+                if (nextStartMatch && nextStartMatch.startIndex > startPos) {
+                  endPos = nextStartMatch.startIndex
+                }
+              }
+            }
+          }
+
+          if (startPos === null) {
             throw new Error(`episode_${idx + 1} startMarker 无法定位`)
           }
-          const endMatch = markerMatcher.matchMarker(endMarker, startMatch.endIndex)
-          if (!endMatch) {
+          if (endPos === null) {
             throw new Error(`episode_${idx + 1} endMarker 无法定位`)
           }
 
           const rawStartIndex = toValidBoundaryIndex(ep.startIndex, content.length)
-          if (rawStartIndex !== null && Math.abs(rawStartIndex - startMatch.startIndex) > 200) {
+          if (rawStartIndex !== null && Math.abs(rawStartIndex - startPos) > 200) {
             throw new Error(`episode_${idx + 1} startIndex 与 marker 偏差过大`)
           }
           const rawEndIndex = toValidBoundaryIndex(ep.endIndex, content.length)
-          if (rawEndIndex !== null && Math.abs(rawEndIndex - endMatch.endIndex) > 200) {
+          if (rawEndIndex !== null && Math.abs(rawEndIndex - endPos) > 200) {
             throw new Error(`episode_${idx + 1} endIndex 与 marker 偏差过大`)
           }
 
-          const startPos = startMatch.startIndex
-          const endPos = endMatch.endIndex
           if (startPos < searchFrom || endPos <= startPos || endPos > content.length) {
             throw new Error(`episode_${idx + 1} 边界区间无效`)
           }

@@ -84,6 +84,15 @@ vi.mock('@/lib/prompt-i18n', () => ({
   buildPrompt: vi.fn(() => 'episode-split-prompt'),
 }))
 vi.mock('@/lib/novel-promotion/story-to-script/clip-matching', () => ({
+  createClipContentMatcher: (content: string) => ({
+    matchBoundary: (startText: string, endText: string, fromIndex = 0) => {
+      const startIndex = content.indexOf(startText, fromIndex)
+      if (startIndex === -1) return null
+      const endIndex = content.indexOf(endText, startIndex + startText.length)
+      if (endIndex === -1) return null
+      return { startIndex, endIndex: endIndex + endText.length }
+    },
+  }),
   createTextMarkerMatcher: (content: string) => ({
     matchMarker: (marker: string, fromIndex = 0) => {
       const startIndex = content.indexOf(marker, fromIndex)

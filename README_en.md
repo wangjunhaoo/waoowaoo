@@ -62,10 +62,21 @@ cd waoowaoo
 docker compose up -d
 ```
 
+Notes:
+```bash
+# The repo includes docker-compose.override.yml
+# so app will be built from the local Dockerfile instead of the ghcr prebuilt image
+```
+
 To update:
 ```bash
 git pull
 docker compose down && docker compose up -d --build
+```
+
+If you still want to use the remote prebuilt image inside the cloned repo, ignore the override file explicitly:
+```bash
+docker compose -f docker-compose.yml up -d
 ```
 
 ### Method 3: Local Development (For Developers)

@@ -1,0 +1,8 @@
+services:
+  app:
+    image: waoowaoo-local:dev
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner

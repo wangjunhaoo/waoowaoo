@@ -69,10 +69,21 @@ cd waoowaoo
 docker compose up -d
 ```
 
+说明：
+```bash
+# 仓库内自带 docker-compose.override.yml
+# 会自动把 app 服务切到本地 Dockerfile 构建，而不是 ghcr 预构建镜像
+```
+
 更新版本：
 ```bash
 git pull
 docker compose down && docker compose up -d --build
+```
+
+如果你在仓库里仍然只想使用远程预构建镜像，可显式忽略 override：
+```bash
+docker compose -f docker-compose.yml up -d
 ```
 
 ### 方式三：本地开发模式（开发者）

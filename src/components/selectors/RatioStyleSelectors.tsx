@@ -226,7 +226,7 @@ export function StyleSelector({
       {isOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={panelRef}
-          className="glass-surface-modal z-[9999] p-3"
+          className="glass-surface-modal z-[9999] p-3 overflow-y-auto app-scrollbar"
           style={panelStyle}
         >
           <div className="grid grid-cols-2 gap-2">

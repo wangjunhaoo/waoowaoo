@@ -95,4 +95,86 @@ describe('openai-compat template image output urls', () => {
       imageUrl: 'https://cdn.test/only.png',
     })
   })
+
+  it('reads b64_json output as data url when provider returns openai-style payload', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ b64_json: 'QUJDRA==' }],
+      output_format: 'png',
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await generateImageViaOpenAICompatTemplate({
+      userId: 'user-1',
+      providerId: 'openai-compatible:test-provider',
+      modelId: 'gpt-image-1',
+      modelKey: 'openai-compatible:test-provider::gpt-image-1',
+      prompt: 'draw a cat',
+      profile: 'openai-compatible',
+      template: {
+        version: 1,
+        mediaType: 'image',
+        mode: 'sync',
+        create: {
+          method: 'POST',
+          path: '/images/generations',
+          contentType: 'application/json',
+          bodyTemplate: {
+            model: '{{model}}',
+            prompt: '{{prompt}}',
+          },
+        },
+        response: {
+          outputUrlPath: '$.data[0].url',
+        },
+      },
+    })
+
+    expect(result).toEqual({
+      success: true,
+      imageUrl: 'data:image/png;base64,QUJDRA==',
+    })
+  })
+
+  it('returns all b64_json outputs as data urls when provider returns multiple images', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      data: [
+        { b64_json: 'QUJDRA==', output_format: 'png' },
+        { b64_json: 'RUVGRw==', output_format: 'webp' },
+      ],
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await generateImageViaOpenAICompatTemplate({
+      userId: 'user-1',
+      providerId: 'openai-compatible:test-provider',
+      modelId: 'gpt-image-1',
+      modelKey: 'openai-compatible:test-provider::gpt-image-1',
+      prompt: 'draw a cat',
+      profile: 'openai-compatible',
+      template: {
+        version: 1,
+        mediaType: 'image',
+        mode: 'sync',
+        create: {
+          method: 'POST',
+          path: '/images/generations',
+          contentType: 'application/json',
+          bodyTemplate: {
+            model: '{{model}}',
+            prompt: '{{prompt}}',
+          },
+        },
+        response: {
+          outputUrlsPath: '$.data',
+        },
+      },
+    })
+
+    expect(result).toEqual({
+      success: true,
+      imageUrl: 'data:image/png;base64,QUJDRA==',
+      imageUrls: [
+        'data:image/png;base64,QUJDRA==',
+        'data:image/webp;base64,RUVGRw==',
+      ],
+    })
+  })
 })

@@ -13,6 +13,10 @@ import { resolveOpenAICompatClientConfig } from './common'
 const OPENAI_COMPAT_PROVIDER_PREFIX = 'openai-compatible:'
 const PROVIDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
 function encodeProviderToken(providerId: string): string {
   const value = providerId.trim()
   if (value.startsWith(OPENAI_COMPAT_PROVIDER_PREFIX)) {
@@ -36,20 +40,91 @@ function resolveModelRef(request: OpenAICompatImageRequest): string {
   throw new Error('OPENAI_COMPAT_IMAGE_MODEL_REF_REQUIRED')
 }
 
-function readTemplateOutputUrls(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
+function toMimeFromOutputFormat(outputFormat: string | undefined): string {
+  const normalized = outputFormat?.trim().toLowerCase()
+  if (normalized === 'jpeg' || normalized === 'jpg') return 'image/jpeg'
+  if (normalized === 'webp') return 'image/webp'
+  return 'image/png'
+}
+
+function readRequestedOutputFormat(options: Record<string, unknown> | undefined): string | undefined {
+  const rawOutputFormat = options?.outputFormat
+  if (typeof rawOutputFormat === 'string' && rawOutputFormat.trim()) {
+    return rawOutputFormat.trim()
+  }
+  const rawSnakeCaseOutputFormat = options?.output_format
+  if (typeof rawSnakeCaseOutputFormat === 'string' && rawSnakeCaseOutputFormat.trim()) {
+    return rawSnakeCaseOutputFormat.trim()
+  }
+  return undefined
+}
+
+function readPayloadOutputFormat(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined
+  const rawOutputFormat = payload.output_format
+  if (typeof rawOutputFormat === 'string' && rawOutputFormat.trim()) {
+    return rawOutputFormat.trim()
+  }
+  return undefined
+}
+
+function pathTargetsBase64(path: string | undefined): boolean {
+  return typeof path === 'string' && path.includes('b64_json')
+}
+
+function normalizeTemplateOutputValue(input: {
+  rawValue: string
+  path?: string
+  mimeType: string
+}): string {
+  const trimmed = input.rawValue.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('data:')) return trimmed
+  if (pathTargetsBase64(input.path)) {
+    return `data:${input.mimeType};base64,${trimmed}`
+  }
+  return trimmed
+}
+
+function readTemplateOutputUrls(input: {
+  value: unknown
+  path?: string
+  fallbackMimeType: string
+}): string[] {
+  const values = Array.isArray(input.value) ? input.value : [input.value]
   const urls: string[] = []
-  for (const item of value) {
-    if (typeof item === 'string' && item.trim()) {
-      urls.push(item.trim())
+
+  for (const item of values) {
+    if (typeof item === 'string') {
+      const normalized = normalizeTemplateOutputValue({
+        rawValue: item,
+        path: input.path,
+        mimeType: input.fallbackMimeType,
+      })
+      if (normalized) {
+        urls.push(normalized)
+      }
       continue
     }
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
-    const url = (item as { url?: unknown }).url
+
+    if (!isRecord(item)) continue
+
+    const url = item.url
     if (typeof url === 'string' && url.trim()) {
       urls.push(url.trim())
+      continue
+    }
+
+    const b64Json = item.b64_json
+    if (typeof b64Json === 'string' && b64Json.trim()) {
+      const rawOutputFormat = item.output_format
+      const mimeType = typeof rawOutputFormat === 'string' && rawOutputFormat.trim()
+        ? toMimeFromOutputFormat(rawOutputFormat.trim())
+        : input.fallbackMimeType
+      urls.push(`data:${mimeType};base64,${b64Json.trim()}`)
     }
   }
+
   return urls
 }
 
@@ -99,23 +174,35 @@ export async function generateImageViaOpenAICompatTemplate(
   }
 
   if (request.template.mode === 'sync') {
-    const outputUrls = readTemplateOutputUrls(
-      readJsonPath(payload, request.template.response.outputUrlsPath),
+    const fallbackMimeType = toMimeFromOutputFormat(
+      readPayloadOutputFormat(payload) || readRequestedOutputFormat(request.options),
     )
-    if (outputUrls.length > 0) {
-      const first = outputUrls[0]
+    const outputUrls = readTemplateOutputUrls({
+      value: readJsonPath(payload, request.template.response.outputUrlsPath),
+      path: request.template.response.outputUrlsPath,
+      fallbackMimeType,
+    })
+    const outputUrl = readTemplateOutputUrls({
+      value: readJsonPath(payload, request.template.response.outputUrlPath),
+      path: request.template.response.outputUrlPath,
+      fallbackMimeType,
+    })[0]
+    const fallbackOpenAIDataUrls = readTemplateOutputUrls({
+      value: readJsonPath(payload, '$.data'),
+      path: '$.data',
+      fallbackMimeType,
+    })
+    const resolvedOutputUrls = outputUrls.length > 0
+      ? outputUrls
+      : outputUrl
+        ? [outputUrl]
+        : fallbackOpenAIDataUrls
+    if (resolvedOutputUrls.length > 0) {
+      const first = resolvedOutputUrls[0]
       return {
         success: true,
         imageUrl: first,
-        ...(outputUrls.length > 1 ? { imageUrls: outputUrls } : {}),
-      }
-    }
-
-    const outputUrl = readJsonPath(payload, request.template.response.outputUrlPath)
-    if (typeof outputUrl === 'string' && outputUrl.trim().length > 0) {
-      return {
-        success: true,
-        imageUrl: outputUrl.trim(),
+        ...(resolvedOutputUrls.length > 1 ? { imageUrls: resolvedOutputUrls } : {}),
       }
     }
     throw new Error('OPENAI_COMPAT_IMAGE_TEMPLATE_OUTPUT_NOT_FOUND')

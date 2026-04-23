@@ -162,6 +162,27 @@ export const ART_STYLES = [
     preview: '实',
     promptZh: '真实电影级画面质感，真实现实场景，色彩饱满通透，画面干净精致，真实感',
     promptEn: 'Realistic cinematic look, real-world scene fidelity, rich transparent colors, clean and refined image quality.'
+  },
+  {
+    value: 'chinese-cg-painting',
+    label: '古风彩绘',
+    preview: '彩',
+    promptZh: '彩绘风格，超写实国风CG插画，精致的五官，人物特征细腻，电影级光效与构图，景深背景虚化，超高细节，8K分辨率，杰作，品质卓越。',
+    promptEn: 'Chinese CG painting style, hyper-realistic Gufeng illustration, exquisite facial features, delicate character details, cinematic lighting and composition, depth of field with bokeh, ultra-high detail, 8K resolution, masterpiece, superior quality.'
+  },
+  {
+    value: 'guofeng-xianxia-3d-cg',
+    label: '国风仙侠3D',
+    preview: '3仙',
+    promptZh: '国风仙侠3D CG风格，东方审美，人物精致，场景空灵，电影感光影，风格化渲染，具有写意氛围与层次感，可结合水墨粒子与剑气特效。',
+    promptEn: 'Chinese xianxia 3D CG style, refined oriental aesthetics, delicate characters, ethereal environments, cinematic lighting, stylized rendering, poetic atmosphere, with optional ink-particle and sword-aura effects.'
+  },
+  {
+    value: 'ink-xianxia-3d-cg',
+    label: '水墨仙侠3D',
+    preview: '墨3',
+    promptZh: '水墨仙侠3D CG风格，国风审美，风格化渲染，写意留白，水墨粒子特效，剑气化墨，电影级构图与光影，整体空灵而凌厉。',
+    promptEn: 'Ink-wash xianxia 3D CG style, Chinese aesthetics, stylized rendering, expressive negative space, ink-particle effects, sword aura turning into ink, cinematic composition and lighting, ethereal yet sharp.'
   }
 ]
 

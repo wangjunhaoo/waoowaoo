@@ -33,6 +33,29 @@ export type MediaTemplateProbeResult =
     message: string
   }
 
+function hasSyncTemplateOutput(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasSyncTemplateOutput(item))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as { url?: unknown; b64_json?: unknown }
+  if (typeof candidate.url === 'string' && candidate.url.trim().length > 0) {
+    return true
+  }
+  if (typeof candidate.b64_json === 'string' && candidate.b64_json.trim().length > 0) {
+    return true
+  }
+  return false
+}
+
 function toSnippet(raw: string): string | undefined {
   const trimmed = raw.trim()
   if (!trimmed) return undefined
@@ -95,9 +118,11 @@ export async function probeMediaTemplate(input: {
   if (input.template.mode === 'sync') {
     const outputUrl = readJsonPath(createPayload, input.template.response.outputUrlPath)
     const outputUrls = readJsonPath(createPayload, input.template.response.outputUrlsPath)
-    const hasSingle = typeof outputUrl === 'string' && outputUrl.trim().length > 0
-    const hasArray = Array.isArray(outputUrls) && outputUrls.length > 0
-    if (!hasSingle && !hasArray) {
+    const fallbackOpenAIData = readJsonPath(createPayload, '$.data')
+    const hasSingle = hasSyncTemplateOutput(outputUrl)
+    const hasArray = hasSyncTemplateOutput(outputUrls)
+    const hasOpenAICompatFallback = hasSyncTemplateOutput(fallbackOpenAIData)
+    if (!hasSingle && !hasArray && !hasOpenAICompatFallback) {
       return {
         success: false,
         verified: false,

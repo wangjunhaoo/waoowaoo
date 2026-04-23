@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatioSelector, StylePresetSelector, StyleSelector } from '@/components/selectors/RatioStyleSelectors'
+import { ART_STYLES } from '@/lib/constants'
 
 const portalMocks = vi.hoisted(() => {
   return {
@@ -76,10 +77,10 @@ describe('RatioStyleSelectors', () => {
         createElement(StyleSelector, {
           value: 'realistic',
           onChange: () => undefined,
-          options: [
-            { value: 'realistic', label: '真人风格' },
-            { value: 'american-comic', label: '美漫风格' },
-          ],
+          options: ART_STYLES.map((style) => ({
+            value: style.value,
+            label: style.label,
+          })),
         }),
         createElement(StylePresetSelector, {
           value: 'horror-suspense',
@@ -99,7 +100,11 @@ describe('RatioStyleSelectors', () => {
     expect(html).toContain('data-portal-target="body"')
     expect(html).toContain('data-icon="sparklesAlt"')
     expect(html).toContain('data-icon="clapperboard"')
+    expect(html).toContain('overflow-y-auto')
     expect(html).toContain('真人风格')
+    expect(html).toContain('古风彩绘')
+    expect(html).toContain('国风仙侠3D')
+    expect(html).toContain('水墨仙侠3D')
     expect(html).toContain('16:9')
     expect(html).toContain('恐怖悬疑')
     expect(html).toContain('压迫氛围')
